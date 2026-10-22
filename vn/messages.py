@@ -34,3 +34,26 @@ def extract_link_state(buffer):
         offset += LS_TUPLE_SIZE
     return tuples, buffer[total:]
     #add test_messages.py before running testcases
+LSP_HEADER_FMT = "!cIB"
+LSP_LINK_FMT = "!cI"
+LSP_HEADER_SIZE = struct.calcsize(LSP_HEADER_FMT)
+LSP_LINK_SIZE = struct.calcsize(LSP_LINK_FMT)
+
+def pack_lsp(origin, seq, links):
+    data = struct.pack(LSP_HEADER_FMT, origin.encode(), seq, len(links))
+    for nbr in sorted(links):
+        data += struct.pack(LSP_LINK_FMT, nbr.encode(), links[nbr])
+    return data
+def unpack_lsp(data):
+    if len(data) < LSP_HEADER_SIZE:
+        raise ValueError("LSP too short")
+    origin, seq, count = struct.unpack_from(LSP_HEADER_FMT, data, 0)
+    if len(data) != LSP_HEADER_SIZE + count * LSP_LINK_SIZE:
+        raise ValueError("LSP length does not match link count")
+    links = {}
+    offset = LSP_HEADER_SIZE
+    for _ in range(count):
+        nbr, cost = struct.unpack_from(LSP_LINK_FMT, data, offset)
+        links[nbr.decode()] = cost
+        offset += LSP_LINK_SIZE
+    return origin.decode(), seq, links

@@ -4,10 +4,14 @@ import select #waits on several sockets at once
 #single threaded, event driven
 import socket
 import sys
+import time
 
 import messages #our file messages.py
+from linkstate import LinkStateDB #from file linkstate.py
 ON_TCP_PORT = 5000 #vn connects to on at port 5000
 SELECT_TIMEOUT = 1.0 
+LSP_PERIOD = 15.0 #gap between periodic LSPs
+LSP_COPIES = 2 #send each one 2 times. in case udp drops one
 
 def parse_args():
     if len(sys.argv) != 4:
@@ -57,12 +61,26 @@ def print_neighbourhood(tuples):
     others = [t for t in tuples if t[3]!=0]
     print(",".join("%s=%d" % (t[0],t[3]) for t in me + others))
 
+def send_lsp(udp_sock, lsp_bytes, targets):
+    for addr in targets:
+        for _ in range(LSP_COPIES):
+            try:
+                udp_sock.sendto(lsp_bytes, addr)
+            except OSError as e:
+                print("warning: could not send LSP to %s:%d (%s)" % (addr[0], addr[1],e))
+
+def announce_own_lsp(udp_sock, db):
+    origin, seq, links = db.build_own_lsp()
+    lsp_bytes = messages.pack_lsp(origin, seq, links)
+    send_lsp(udp_sock, lsp_bytes, db.forward_targets(None))               
+
 def main():
     on_ip, my_ip, my_port = parse_args()
     udp_sock = open_udp_socket(my_ip, my_port)
     tcp_sock = connect_to_oracle(on_ip, my_ip, my_port)
     tcp_buffer = b"" #bytes received from on but not decoded yet
-    neighbours = []
+    db = LinkStateDB() #who i am, my neighbours, newest lsp from every node
+    next_period = time.monotonic() + LSP_PERIOD #when is the timer triggered again
 
     while True:
         readable, _, _ = select.select([tcp_sock, udp_sock], [], [], SELECT_TIMEOUT)
@@ -79,14 +97,26 @@ def main():
                     tuples, tcp_buffer = messages.extract_link_state(tcp_buffer)
                     if tuples is None:
                         break
-                    neighbours = tuples
-                    print_neighbourhood(neighbours)
+                    print_neighbourhood(tuples)
+                    db.set_neighbourhood(tuples)
+                    announce_own_lsp(udp_sock, db)
+                    next_period = time.monotonic() + LSP_PERIOD
             
             elif sock is udp_sock:
                 #need to decode the lsp, update link state
                 data, addr = udp_sock.recvfrom(2048)
-                print("got %d UDP bytes from %s:%d (LSP handling not written yet)"
-                        % (len(data), addr[0], addr[1]))
-                #next step - every 10-20s resend own lsp and print graph
+                try:
+                    origin, seq, links = messages.unpack_lsp(data)
+                except ValueError as e:
+                    print("ignoring bad UDP packet from %s:%d (%s)" % (addr[0], addr[1], e))
+                    continue
+                if db.accept_lsp(origin, seq, links):
+                    send_lsp(udp_sock, data, db.forward_targets(addr))
+        now = time.monotonic()
+        if now >= next_period:
+            next_period = now + LSP_PERIOD
+            if db.me is not None:
+                announce_own_lsp(udp_sock, db)
+                print(db.graph_text())
 if __name__ == "__main__":
     main()
