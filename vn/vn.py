@@ -10,7 +10,7 @@ import messages #our file messages.py
 from linkstate import LinkStateDB #from file linkstate.py
 ON_TCP_PORT = 5000 #vn connects to on at port 5000
 SELECT_TIMEOUT = 1.0 
-LSP_PERIOD = 15.0 #gap between periodic LSPs
+LSP_PERIOD = 30.0 #gap between periodic LSPs
 LSP_COPIES = 2 #send each one 2 times. in case udp drops one
 
 def parse_args():

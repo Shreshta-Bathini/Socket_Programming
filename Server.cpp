@@ -60,40 +60,34 @@ bool sendLinkState(int fd, int self,
                    const vector<vector<int>>& graph,
                    const vector<VN>& nodes) {
     int n = static_cast<int>(nodes.size());
+    vector<char> buf(2, 0);
+    buf[0] = 2;                      
+    uint8_t count = 0;
 
-   
     for (int j = 0; j < n; j++) {
-        bool isSelf = (j == self);
         int cost = 0;
-
-        if (!isSelf) {
-            if (j < self)
-                cost = graph[j][self - j - 1];
-            else
-                cost = graph[self][j - self - 1];
-
-            if (cost == -1)
-                continue;
+        if (j != self) {
+            cost = (j < self) ? graph[j][self - j - 1]
+                              : graph[self][j - self - 1];
+            if (cost == -1) continue;
         }
-
-        if (!nodes[j].connected)
-            continue;
+        if (!nodes[j].connected) continue;
 
         char alphabet = static_cast<char>('A' + j);
         uint32_t ip = nodes[j].ip;
         uint16_t port = nodes[j].udpPort;
         uint32_t wireCost = htonl(static_cast<uint32_t>(cost));
 
-       
-        if (!sendAll(fd, &alphabet, sizeof(alphabet)) ||
-            !sendAll(fd, &ip, sizeof(ip)) ||
-            !sendAll(fd, &port, sizeof(port)) ||
-            !sendAll(fd, &wireCost, sizeof(wireCost))) {
-            return false;
-        }
+        buf.push_back(alphabet);
+        const char* p;
+        p = reinterpret_cast<const char*>(&ip);       buf.insert(buf.end(), p, p + sizeof(ip));
+        p = reinterpret_cast<const char*>(&port);     buf.insert(buf.end(), p, p + sizeof(port));
+        p = reinterpret_cast<const char*>(&wireCost); buf.insert(buf.end(), p, p + sizeof(wireCost));
+        count++;
     }
 
-    return true;
+    buf[1] = static_cast<char>(count);
+    return sendAll(fd, buf.data(), buf.size());
 }
 
 vector<vector<int>> Node_Graph(const string & filename) {
@@ -227,7 +221,9 @@ int main(int argc, char* argv[]) {
     uint32_t ip;
     uint16_t port;
 
-    if (!recvAll(clientSocket, &ip, sizeof(ip)) ||
+    uint8_t msgType = 0;
+    if (!recvAll(clientSocket, &msgType, 1) || msgType != 1 ||
+        !recvAll(clientSocket, &ip, sizeof(ip)) ||
         !recvAll(clientSocket, &port, sizeof(port))) {
         cerr << "Failed to receive CONNECT from VN "
              << char('A' + idx) << '\n';
