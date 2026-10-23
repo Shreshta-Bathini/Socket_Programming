@@ -10,11 +10,11 @@ below)
 # First row is for virtual node A, next for B, and so on
 # Example matrix for the example network shown in instructions is below
 # Costs from A to B, C, D, E
-3 1 -1 -1
+1 -1 -1 -1
 # Costs from B to C, D, E; note the tab at the beginning, to overall give view
 of upper-right triangle
-2 4 -1
+1 -1 -1
 # Costs from C to D, E
--1 1
+1 -1
 # Costs from D to E
-5
+1

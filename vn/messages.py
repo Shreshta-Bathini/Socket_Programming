@@ -21,6 +21,7 @@ def extract_link_state(buffer):
     if len(buffer) < LS_HEADER_SIZE:
         return None, buffer
     msg_type , count = struct.unpack_from(LS_HEADER_FMT, buffer, 0)
+    # print("Received:", repr(buffer))
     if msg_type != MSG_LINK_STATE:
         raise ValueError("unexpected message type %d from ON" % msg_type)
     total = LS_HEADER_SIZE + count * LS_TUPLE_SIZE

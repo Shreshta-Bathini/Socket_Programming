@@ -41,10 +41,17 @@ class LinkStateDB:
 
         def cost(a,b):
             if a in self.lsdb:
-                return self.lsdb[a][1].get(b,-1)
+                links = self.lsdb[a][1]
+                if b in links:
+                    return links[b]
+
             if b in self.lsdb:
-                return self.lsdb[b][1].get(a,-1)
+                links = self.lsdb[b][1]
+                if a in links:
+                    return links[a]
+
             return -1
+
 
         lines = ["# known graph, node order: " + " ".join(nodes)]
         for i, a in enumerate(nodes[:-1]):
